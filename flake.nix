@@ -6,15 +6,24 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     nix-darwin = {
-        url = "github:LnL7/nix-darwin";
-        inputs.nixpkgs.follows = "nixpkgs";
+      url = "github:LnL7/nix-darwin";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
+    home-manager = {
+      url = "github:nix-community/home-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    mac-app-util.url = "github:hraban/mac-app-util";
+    nix-vscode-extensions.url = "github:nix-community/nix-vscode-extensions";
+    #ghostty.url = "github:ghostty-org/ghostty";
+    nixvim.url = "github:eoinlane/nixvim";
   };
 
-  outputs = inputs@{ self, nix-darwin, nixpkgs }:
-  let
-    configuration = {pkgs, ... }: {
-
+  outputs = inputs@{ self, nix-darwin, nixpkgs, home-manager, mac-app-util, nix-vscode-extensions, nixvim }:
+    let
+      configuration = { pkgs, ... }: {
+        nix.enable = false;
+        nixpkgs.config.allowUnfree = true;
         #services.nix-daemon.enable = true;
         # Necessary for using flakes on this system.
         nix.settings.experimental-features = "nix-command flakes";
@@ -29,23 +38,120 @@
         # If you're on an Intel system, replace with "x86_64-darwin"
         nixpkgs.hostPlatform = "aarch64-darwin";
 
+        nixpkgs.overlays = [
+          nix-vscode-extensions.overlays.default
+        ];
+
+
         # Declare the user that will be running `nix-darwin`.
         users.users.eoin = {
-            name = "eoin";
-            home = "/Users/eoin";
+          name = "eoin";
+          home = "/Users/eoin";
         };
+
+        security.pam.enableSudoTouchIdAuth = true;
 
         # Create /etc/zshrc that loads the nix-darwin environment.
         programs.zsh.enable = true;
+        environment.systemPackages = [ pkgs.neofetch pkgs.neovim pkgs.nnn pkgs.kitty pkgs.tailscale ];
 
-        environment.systemPackages = [ ];
+        homebrew = {
+          enable = true;
+          # onActivation.cleanup = "uninstall";
+
+          taps = [ ];
+          brews = [ "cowsay" "ungoogled-chromium" ];
+          casks = [ ];
+        };
+      };
+      homeconfig = { pkgs, ... }: {
+        # this is internal compatibility configuration 
+        # for home-manager, don't change this!
+        home.stateVersion = "23.05";
+        # Let home-manager install and manage itself.
+        programs.home-manager.enable = true;
+
+        home.packages = with pkgs; [
+          nixpkgs-fmt
+          coreutils-full
+          inputs.nixvim.packages.${pkgs.system}.default
+          #inputs.ghostty.packages."${pkgs.system}".default
+        ];
+
+        home.sessionVariables = {
+          EDITOR = "vim";
+        };
+        home.file.".vimrc".source = ./vim_configuration;
+
+        programs.zsh = {
+          enable = true;
+          shellAliases = {
+            switch = "darwin-rebuild switch --flake ~/.config/nix";
+          };
+        };
+        programs.git = {
+          enable = true;
+          userName = "Eoin Lane";
+          userEmail = "eoinlane@gmail.com";
+          ignores = [ ".DS_Store" ];
+          extraConfig = {
+            init.defaultBranch = "main";
+            push.autoSetupRemote = true;
+          };
+        };
+        programs.vscode = {
+          enable = true;
+
+          userSettings = {
+            # This property will be used to generate settings.json:
+            # https://code.visualstudio.com/docs/getstarted/settings#_settingsjson
+            "editor.formatOnSave" = true;
+            "workbench.colorTheme" = "Dracula Theme";
+          };
+          keybindings = [
+            # See https://code.visualstudio.com/docs/getstarted/keybindings#_advanced-customization
+            {
+              key = "shift+cmd+j";
+              command = "workbench.action.focusActiveEditorGroup";
+              when = "terminalFocus";
+            }
+          ];
+
+          # Some extensions require you to reload vscode, but unlike installing
+          # from the marketplace, no one will tell you that. So after running
+          # `darwin-rebuild switch`, make sure to restart vscode!
+          extensions = with pkgs.vscode-marketplace; [
+            # Search for vscode-extensions on https://search.nixos.org/packages
+            dracula-theme.theme-dracula
+            jnoortheen.nix-ide
+            vscodevim.vim
+          ];
+        };
+        programs.kitty = {
+          enable = true;
+          settings = {
+            background_opacity = 0.5;
+            confirm_os_window_close = 0;
+            font_size = 14.0;
+            font_family = "JetBrainsMono Nerd Font";
+
+
+          };
+        };
+      };
+    in
+    {
+      darwinConfigurations.Eoins-Mac-Air = nix-darwin.lib.darwinSystem {
+        modules = [
+          configuration
+          home-manager.darwinModules.home-manager
+          {
+            home-manager.useGlobalPkgs = true;
+            home-manager.useUserPackages = true;
+            home-manager.verbose = true;
+            home-manager.users.eoin = homeconfig;
+          }
+        ];
+      };
     };
-  in
-  {
-    darwinConfigurations.Eoins-Mac-Air = nix-darwin.lib.darwinSystem {
-      modules = [
-         configuration
-      ];
-    };
-  };
 }
