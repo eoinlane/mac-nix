@@ -58,8 +58,13 @@
 
         programs.zsh = {
           enable = true;
+          "oh-my-zsh" = {
+            enable = true;
+            theme = "agnoster";
+            plugins = [ "git" "z" ];
+          };
           shellAliases = {
-            switch = "darwin-rebuild switch --flake ~/.config/nix#Eoins-Mac-Air";
+            switch = "darwin-rebuild switch --flake ~/.config/nix#Eoins-M3-Air";
             ll = "ls -lah --color";
           };
         };
@@ -96,6 +101,8 @@
         programs.kitty = {
           enable = true;
           settings = {
+            shell = "${pkgs.zsh}/bin/zsh";
+            shell_args = "--login";
             background_opacity = 0.8;
             confirm_os_window_close = 0;
             font_size = 14.0;
@@ -105,7 +112,7 @@
       };
     in
     {
-      darwinConfigurations.Eoins-Mac-Air = nix-darwin.lib.darwinSystem {
+      darwinConfigurations.Eoins-M3-Air = nix-darwin.lib.darwinSystem {
         modules = [
           configuration
           home-manager.darwinModules.home-manager
